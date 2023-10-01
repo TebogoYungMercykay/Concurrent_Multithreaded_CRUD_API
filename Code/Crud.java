@@ -74,10 +74,10 @@ public class Crud {
     public void CreateOperation() {
         System.out.println(Thread.currentThread().getName() + ": CREATE is waiting for request.");
 		this.createLock.lock();
-        this.databaseLock.lock();
 		try {
             Info createRequest = this.create.poll();
             if (createRequest != null) {
+                this.databaseLock.lock();
                 try{
                     this.crud_database.add(createRequest);
                     System.out.println(Thread.currentThread().getName() + ": CREATE success [id = " + createRequest.id + ", name = " + createRequest.name + "]");
@@ -98,10 +98,10 @@ public class Crud {
     public void ReadOperation() {
         System.out.println(Thread.currentThread().getName() + ": READ is waiting for request.");
 		this.readLock.lock();
-        this.databaseLock.lock();
 		try {
             Boolean tempOperation = this.read.poll();
             if (tempOperation != null) {
+                this.databaseLock.lock();
                 try{
                     System.out.println(Thread.currentThread().getName() + ": READ");
                     System.out.println("___________________________________________");
@@ -130,10 +130,10 @@ public class Crud {
     public void UpdateOperation() {
         System.out.println(Thread.currentThread().getName() + ": UPDATE is waiting for request.");
 		this.updateLock.lock();
-        this.databaseLock.lock();
 		try {
             Info updateRequest = this.update.poll();
             if (updateRequest != null) {
+                this.databaseLock.lock();
                 try{
                     boolean updatedRecord = false;
                     for (Info record : this.crud_database) {
@@ -171,10 +171,10 @@ public class Crud {
     public void DeleteOperation() {
         System.out.println(Thread.currentThread().getName() + ": DELETE is waiting for request.");
 		this.deleteLock.lock();
-        this.databaseLock.lock();
 		try {
             Info deleteRequest = this.delete.poll();
             if (deleteRequest != null) {
+                this.databaseLock.lock();
                 try{
                     boolean deletedRecord = false;
                     for (Info record : this.crud_database) {
