@@ -12,6 +12,7 @@ public class Crud {
     private volatile Queue<Info> crud_database = new LinkedList<>();
     public int CRUD_NumThreads;
 
+    private Bakery databaseLock = null;
     private Bakery createLock = null;
     private Bakery readLock = null;
     private Bakery updateLock = null;
@@ -67,6 +68,7 @@ public class Crud {
         this.readLock = new Bakery(this.CRUD_NumThreads);
         this.updateLock = new Bakery(this.CRUD_NumThreads);
         this.deleteLock = new Bakery(this.CRUD_NumThreads);
+        this.databaseLock = new Bakery(this.CRUD_NumThreads);
     }
 
     public void CreateOperation() {
@@ -75,8 +77,13 @@ public class Crud {
 		try {
             Info createRequest = this.create.poll();
             if (createRequest != null) {
-                this.crud_database.add(createRequest);
-                System.out.println(Thread.currentThread().getName() + ": CREATE success [id = " + createRequest.id + ", name = " + createRequest.name + "]");
+                this.databaseLock.lock();
+                try{
+                    this.crud_database.add(createRequest);
+                    System.out.println(Thread.currentThread().getName() + ": CREATE success [id = " + createRequest.id + ", name = " + createRequest.name + "]");
+                } finally {
+                    this.databaseLock.unlock();
+                }
             }
             System.out.println(Thread.currentThread().getName() + ": CREATE is sleeping");
             Thread.currentThread();
@@ -94,13 +101,18 @@ public class Crud {
 		try {
             Boolean tempOperation = this.read.poll();
             if (tempOperation != null) {
-                System.out.println(Thread.currentThread().getName() + ": READ");
-                System.out.println("___________________________________________");
-                for (Info record : this.crud_database) {
-                    System.out.println("[id = " + record.id + ", name = " + record.name + ", practicals = " + record.practicals + ", assignments = " + record.assignments + "]");
+                this.databaseLock.lock();
+                try{
+                    System.out.println(Thread.currentThread().getName() + ": READ");
+                    System.out.println("___________________________________________");
+                    for (Info record : this.crud_database) {
+                        System.out.println("[id = " + record.id + ", name = " + record.name + ", practicals = " + record.practicals + ", assignments = " + record.assignments + "]");
+                    }
+                    System.out.println("___________________________________________");
+                    System.out.println(Thread.currentThread().getName() + ": READ success [Reading all Records]");
+                } finally {
+                    this.databaseLock.unlock();
                 }
-                System.out.println("___________________________________________");
-                System.out.println(Thread.currentThread().getName() + ": READ success [Reading all Records]");
                 System.out.println(Thread.currentThread().getName() + ": READ is sleeping");
                 Thread.currentThread();
                 Thread.sleep(this.getSleepingTime());
@@ -110,6 +122,7 @@ public class Crud {
 		} catch (InterruptedException exception) {
 			exception.printStackTrace();
 		} finally {
+            this.databaseLock.unlock();
 			this.readLock.unlock();
 		}
 	}
@@ -120,23 +133,28 @@ public class Crud {
 		try {
             Info updateRequest = this.update.poll();
             if (updateRequest != null) {
-                boolean updatedRecord = false;
-                for (Info record : this.crud_database) {
-                    if (record.id.equals(updateRequest.id) && record.name.equals(updateRequest.name)) {
-                        record.practicals = updateRequest.practicals;
-                        record.assignments = updateRequest.assignments;
-                        updatedRecord = true;
-                        break;
+                this.databaseLock.lock();
+                try{
+                    boolean updatedRecord = false;
+                    for (Info record : this.crud_database) {
+                        if (record.id.equals(updateRequest.id) && record.name.equals(updateRequest.name)) {
+                            record.practicals = updateRequest.practicals;
+                            record.assignments = updateRequest.assignments;
+                            updatedRecord = true;
+                            break;
+                        }
                     }
-                }
-                if (updatedRecord == true) {
-                    System.out.println(Thread.currentThread().getName() + " success [id = " + updateRequest.id + ", name = " + updateRequest.name + "]");
-                } else {
-                    updateRequest.attempt++;
-                    if (updateRequest.attempt <= 2) {
-                        this.update.add(updateRequest);
+                    if (updatedRecord == true) {
+                        System.out.println(Thread.currentThread().getName() + " success [id = " + updateRequest.id + ", name = " + updateRequest.name + "]");
+                    } else {
+                        updateRequest.attempt++;
+                        if (updateRequest.attempt <= 2) {
+                            this.update.add(updateRequest);
+                        }
+                        System.out.println(Thread.currentThread().getName() + " failed [id = " + updateRequest.id + ", name = " + updateRequest.name + "]");
                     }
-                    System.out.println(Thread.currentThread().getName() + " failed [id = " + updateRequest.id + ", name = " + updateRequest.name + "]");
+                } finally {
+                    this.databaseLock.unlock();
                 }
             }
             System.out.println(Thread.currentThread().getName() + ": UPDATE is sleeping");
@@ -145,6 +163,7 @@ public class Crud {
 		} catch (InterruptedException exception) {
 			exception.printStackTrace();
 		} finally {
+            this.databaseLock.unlock();
 			this.updateLock.unlock();
 		}
 	}
@@ -155,22 +174,27 @@ public class Crud {
 		try {
             Info deleteRequest = this.delete.poll();
             if (deleteRequest != null) {
-                boolean deletedRecord = false;
-                for (Info record : this.crud_database) {
-                    if (record.id.equals(deleteRequest.id) && record.name.equals(deleteRequest.name)) {
-                        this.crud_database.remove(record);
-                        deletedRecord = true;
-                        break;
+                this.databaseLock.lock();
+                try{
+                    boolean deletedRecord = false;
+                    for (Info record : this.crud_database) {
+                        if (record.id.equals(deleteRequest.id) && record.name.equals(deleteRequest.name)) {
+                            this.crud_database.remove(record);
+                            deletedRecord = true;
+                            break;
+                        }
                     }
-                }
-                if (deletedRecord) {
-                    System.out.println(Thread.currentThread().getName() + " success [id = " + deleteRequest.id + ", name = " + deleteRequest.name + "]");
-                } else {
-                    deleteRequest.attempt++;
-                    if (deleteRequest.attempt <= 2) {
-                        this.delete.add(deleteRequest);
+                    if (deletedRecord) {
+                        System.out.println(Thread.currentThread().getName() + " success [id = " + deleteRequest.id + ", name = " + deleteRequest.name + "]");
+                    } else {
+                        deleteRequest.attempt++;
+                        if (deleteRequest.attempt <= 2) {
+                            this.delete.add(deleteRequest);
+                        }
+                        System.out.println(Thread.currentThread().getName() + " failed [id = " + deleteRequest.id + ", name = " + deleteRequest.name + "]");
                     }
-                    System.out.println(Thread.currentThread().getName() + " failed [id = " + deleteRequest.id + ", name = " + deleteRequest.name + "]");
+                } finally {
+                    this.databaseLock.unlock();
                 }
             }
             System.out.println(Thread.currentThread().getName() + ": DELETE is sleeping");
@@ -179,6 +203,7 @@ public class Crud {
 		} catch (InterruptedException exception) {
 			exception.printStackTrace();
 		} finally {
+            this.databaseLock.unlock();
 			this.deleteLock.unlock();
 		}
 	}
